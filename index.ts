@@ -1,74 +1,84 @@
 import { $ } from "bun";
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 const WOL_PASSWORD = process.env.WOL_PASSWORD;
 const MAC_ADDRESS = process.env.MAC_ADDRESS;
 const TARGET_IP = process.env.TARGET_IP;
 
-// Vérification stricte au démarrage
 if (!WOL_PASSWORD || !MAC_ADDRESS || !TARGET_IP) {
-  console.error("Erreur : WOL_PASSWORD, MAC_ADDRESS et TARGET_IP doivent être définis dans .env");
+  console.error("❌ Erreur : Variables manquantes dans le .env");
   process.exit(1);
 }
+
+// 🛡️ SYSTÈME DE LOGS INTERNES
+const logsHistory: string[] = [];
+function shieldLog(message: string) {
+  const timestamp = new Date().toLocaleTimeString('fr-FR');
+  const formatted = `[${timestamp}] ${message}`;
+  console.log(formatted); // Garde la trace dans PM2
+  logsHistory.push(formatted);
+  if (logsHistory.length > 15) logsHistory.shift(); // Garde seulement les 15 derniers
+}
+
+shieldLog("DÉMARRAGE DU SYSTÈME CENTRAL.");
 
 const server = Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
 
+    // Vérification Haute Sécurité
     const authHeader = req.headers.get("authorization");
+    const expectedAuth = `Bearer ${WOL_PASSWORD}`;
 
-    if (!authHeader || authHeader !== `Bearer ${WOL_PASSWORD}`) {
-      await Bun.sleep(2000); 
+    if (!authHeader || authHeader !== expectedAuth) {
+      const ip = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for") || "Inconnue";
+      shieldLog(`⚠️ ALERTE : Tentative d'intrusion bloquée (IP: ${ip})`);
       return new Response(
-        JSON.stringify({ error: "Accès refusé" }), 
+        JSON.stringify({ error: "ACCÈS REFUSÉ" }), 
         { status: 403, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Route WAKE (Réveil)
+    // NOUVELLE ROUTE : LOGS
+    if (url.pathname === "/logs" && req.method === "GET") {
+      return new Response(
+        JSON.stringify({ success: true, logs: logsHistory.join("\n") }), 
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Route WAKE
     if (url.pathname === "/wake" && req.method === "GET") {
       try {
-        await $`npx ts-wol@latest ${MAC_ADDRESS}`;
-        console.log(`✅ Paquet WoL envoyé avec succès à ${MAC_ADDRESS}`);
+        shieldLog("INITIATION PROTOCOLE RÉVEIL (MAGIC PACKET)");
+        await $`npx ts-wol@latest ${MAC_ADDRESS}`.quiet();
         return new Response(
-          JSON.stringify({ success: true, message: "Paquet magique envoyé." }), 
+          JSON.stringify({ success: true, message: "PROTOCOLE DE RÉVEIL INITIALISÉ." }), 
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       } catch (error) {
-        console.error(`❌ Erreur WoL:`, error);
-        return new Response(
-          JSON.stringify({ error: "Erreur lors de l'envoi du paquet réseau." }), 
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
+        shieldLog("❌ ERREUR LORS DE L'ENVOI DU PAQUET");
+        return new Response(JSON.stringify({ error: "ERREUR RÉSEAU" }), { status: 500 });
       }
     }
 
-    // 3. Route STATUS (Vérification)
+    // Route STATUS
     if (url.pathname === "/status" && req.method === "GET") {
       try {
-        // Ping l'IP cible (-c 1 = 1 paquet, -W 1 = timeout 1 seconde)
-        // .quiet() masque la sortie console, .nothrow() empêche Bun de crasher si le ping échoue
         const { exitCode } = await $`ping -c 1 -W 1 ${TARGET_IP}`.quiet().nothrow();
-        
-        // Si le code de sortie est 0, le ping a réussi (PC allumé)
-        const isOnline = exitCode === 0;
-
+        // On ne loggue pas les pings réussis pour ne pas spammer la console, sauf si c'est important
         return new Response(
-          JSON.stringify({ online: isOnline, ip: TARGET_IP }), 
+          JSON.stringify({ online: exitCode === 0, ip: TARGET_IP }), 
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       } catch (error) {
-        return new Response(
-          JSON.stringify({ error: "Erreur interne lors du ping." }), 
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "ERREUR PING" }), { status: 500 });
       }
     }
 
-    // Route par défaut (404)
-    return new Response(JSON.stringify({ error: "Route introuvable" }), { status: 404 });
+    return new Response(JSON.stringify({ error: "ROUTE INCONNUE" }), { status: 404 });
   },
 });
 
-console.log(`🚀 Serveur WoL actif sur http://localhost:${server.port}`);
+console.log(`🚀 Serveur actif sur le port ${server.port}`);
