@@ -15,12 +15,13 @@ const server = Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
-    const userPwd = url.searchParams.get("mdp");
 
-    // 1. Vérification du mot de passe pour toutes les routes
-    if (!userPwd || userPwd !== WOL_PASSWORD) {
+    const authHeader = req.headers.get("authorization");
+
+    if (!authHeader || authHeader !== `Bearer ${WOL_PASSWORD}`) {
+      await Bun.sleep(2000); 
       return new Response(
-        JSON.stringify({ error: "Accès refusé : mot de passe invalide." }), 
+        JSON.stringify({ error: "Accès refusé" }), 
         { status: 403, headers: { "Content-Type": "application/json" } }
       );
     }
