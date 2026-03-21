@@ -77,6 +77,39 @@ const server = Bun.serve({
       }
     }
 
+    // ROUTE SHUTDOWN 
+    if (url.pathname === "/shutdown" && req.method === "GET") {
+      try {
+        shieldLog("INITIATION PROTOCOLE D'EXTINCTION...");
+        // On lance la commande sudo shutdown sans mdp grâce à visudo
+        await $`ssh ton_user_ubuntu@${TARGET_IP} "sudo /sbin/shutdown -h now"`.quiet();
+
+        return new Response(
+          JSON.stringify({ success: true, message: "COMMANDE D'EXTINCTION ENVOYÉE." }), 
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      } catch (error) {
+        shieldLog("❌ ERREUR LORS DE L'EXTINCTION");
+        return new Response(JSON.stringify({ error: "ÉCHEC DE LA LIAISON SSH" }), { status: 500 });
+      }
+    }
+
+    // ROUTE RESTART 
+    if (url.pathname === "/restart" && req.method === "GET") {
+      try {
+        shieldLog("INITIATION PROTOCOLE DE REDÉMARRAGE...");
+        await $`ssh ton_user_ubuntu@${TARGET_IP} "sudo /sbin/reboot"`.quiet();
+
+        return new Response(
+          JSON.stringify({ success: true, message: "COMMANDE DE REDÉMARRAGE ENVOYÉE." }), 
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      } catch (error) {
+        shieldLog("❌ ERREUR LORS DU REDÉMARRAGE");
+        return new Response(JSON.stringify({ error: "ÉCHEC DE LA LIAISON SSH" }), { status: 500 });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "ROUTE INCONNUE" }), { status: 404 });
   },
 });
