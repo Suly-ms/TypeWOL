@@ -1,12 +1,13 @@
 import { $ } from "bun";
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 const WOL_PASSWORD = process.env.WOL_PASSWORD;
 const MAC_ADDRESS = process.env.MAC_ADDRESS;
 const TARGET_IP = process.env.TARGET_IP;
+const TARGET_USER = process.env.TARGET_USER;
 
 if (!WOL_PASSWORD || !MAC_ADDRESS || !TARGET_IP) {
-  console.error("❌ Erreur : Variables manquantes dans le .env");
+  console.error("Erreur : Variables manquantes dans le .env");
   process.exit(1);
 }
 
@@ -33,7 +34,7 @@ const server = Bun.serve({
 
     if (!authHeader || authHeader !== expectedAuth) {
       const ip = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for") || "Inconnue";
-      shieldLog(`⚠️ ALERTE : Tentative d'intrusion bloquée (IP: ${ip})`);
+      shieldLog(`ALERTE : Tentative d'intrusion bloquée (IP: ${ip})`);
       return new Response(
         JSON.stringify({ error: "ACCÈS REFUSÉ" }), 
         { status: 403, headers: { "Content-Type": "application/json" } }
@@ -58,7 +59,7 @@ const server = Bun.serve({
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       } catch (error) {
-        shieldLog("❌ ERREUR LORS DE L'ENVOI DU PAQUET");
+        shieldLog("ERREUR LORS DE L'ENVOI DU PAQUET");
         return new Response(JSON.stringify({ error: "ERREUR RÉSEAU" }), { status: 500 });
       }
     }
@@ -79,34 +80,38 @@ const server = Bun.serve({
 
     // ROUTE SHUTDOWN 
     if (url.pathname === "/shutdown" && req.method === "GET") {
-      try {
-        shieldLog("INITIATION PROTOCOLE D'EXTINCTION...");
-        // On lance la commande sudo shutdown sans mdp grâce à visudo
-        await $`ssh ton_user_ubuntu@${TARGET_IP} "sudo /sbin/shutdown -h now"`.quiet();
+      shieldLog("INITIATION PROTOCOLE D'EXTINCTION...");
+      // Injection de TARGET_USER et TARGET_IP
+      const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /sbin/shutdown -h now"`.nothrow().quiet();
 
+      if (result.exitCode === 0) {
+        shieldLog("COMMANDE D'EXTINCTION ACCEPTÉE.");
         return new Response(
-          JSON.stringify({ success: true, message: "COMMANDE D'EXTINCTION ENVOYÉE." }), 
+          JSON.stringify({ success: true, message: "COMMANDE ENVOYÉE." }), 
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
-      } catch (error) {
-        shieldLog("❌ ERREUR LORS DE L'EXTINCTION");
-        return new Response(JSON.stringify({ error: "ÉCHEC DE LA LIAISON SSH" }), { status: 500 });
+      } else {
+        const errorMsg = result.stderr.toString().trim() || "Erreur inconnue";
+        shieldLog(`ÉCHEC SSH : ${errorMsg}`);
+        return new Response(JSON.stringify({ error: "ÉCHEC SSH" }), { status: 500 });
       }
     }
 
-    // ROUTE RESTART 
+    // ROUTE : RESTART
     if (url.pathname === "/restart" && req.method === "GET") {
-      try {
-        shieldLog("INITIATION PROTOCOLE DE REDÉMARRAGE...");
-        await $`ssh ton_user_ubuntu@${TARGET_IP} "sudo /sbin/reboot"`.quiet();
+      shieldLog("INITIATION PROTOCOLE DE REDÉMARRAGE...");
+      const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /sbin/reboot"`.nothrow().quiet();
 
+      if (result.exitCode === 0) {
+        shieldLog("✅ COMMANDE DE REDÉMARRAGE ACCEPTÉE.");
         return new Response(
-          JSON.stringify({ success: true, message: "COMMANDE DE REDÉMARRAGE ENVOYÉE." }), 
+          JSON.stringify({ success: true, message: "COMMANDE ENVOYÉE." }), 
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
-      } catch (error) {
-        shieldLog("❌ ERREUR LORS DU REDÉMARRAGE");
-        return new Response(JSON.stringify({ error: "ÉCHEC DE LA LIAISON SSH" }), { status: 500 });
+      } else {
+        const errorMsg = result.stderr.toString().trim() || "Erreur inconnue";
+        shieldLog(`ÉCHEC SSH : ${errorMsg}`);
+        return new Response(JSON.stringify({ error: "ÉCHEC SSH" }), { status: 500 });
       }
     }
 
