@@ -82,7 +82,7 @@ const server = Bun.serve({
     if (url.pathname === "/shutdown" && req.method === "GET") {
       shieldLog("INITIATION PROTOCOLE D'EXTINCTION...");
       // Injection de TARGET_USER et TARGET_IP
-      const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /sbin/shutdown -h now"`.nothrow().quiet();
+      const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /usr/sbin/shutdown -h now"`.nothrow().quiet();
 
       if (result.exitCode === 0) {
         shieldLog("COMMANDE D'EXTINCTION ACCEPTÉE.");
@@ -100,7 +100,7 @@ const server = Bun.serve({
     // ROUTE : RESTART
     if (url.pathname === "/restart" && req.method === "GET") {
       shieldLog("INITIATION PROTOCOLE DE REDÉMARRAGE...");
-      const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /sbin/reboot"`.nothrow().quiet();
+      const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /usr/sbin/reboot"`.nothrow().quiet();
 
       if (result.exitCode === 0) {
         shieldLog("COMMANDE DE REDÉMARRAGE ACCEPTÉE.");
