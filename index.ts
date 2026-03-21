@@ -103,7 +103,7 @@ const server = Bun.serve({
       const result = await $`ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP} "sudo /sbin/reboot"`.nothrow().quiet();
 
       if (result.exitCode === 0) {
-        shieldLog("✅ COMMANDE DE REDÉMARRAGE ACCEPTÉE.");
+        shieldLog("COMMANDE DE REDÉMARRAGE ACCEPTÉE.");
         return new Response(
           JSON.stringify({ success: true, message: "COMMANDE ENVOYÉE." }), 
           { status: 200, headers: { "Content-Type": "application/json" } }
@@ -119,4 +119,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🚀 Serveur actif sur le port ${server.port}`);
+console.log(`Serveur actif sur le port ${server.port}`);
